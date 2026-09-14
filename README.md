@@ -1,0 +1,2 @@
+# AgentHugoExtractorTool
+RWS extractor tool
