@@ -3,6 +3,7 @@ package io.github.turbosebo;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Scanner;
 import java.util.Map;
@@ -128,6 +129,25 @@ public class Main {
         return RWSFileType.UNKNOWN;
     }
 
+    private static String readPaddedString(RandomAccessFile file) throws IOException {
+        int paddedSize = readUInt32LE(file);
+        if (paddedSize % 4 != 0) throw new IOException("Wrong paddedSize: " + paddedSize);
+
+        byte[] buffer = new byte[paddedSize];
+        file.readFully(buffer);
+
+        int lenght = 0;
+        while(lenght< paddedSize && buffer[lenght]!=0){
+            lenght++;
+        }
+        return new String(buffer, 0, lenght, StandardCharsets.US_ASCII); //
+    }
+
+    private static String extractBasename(String path){
+        String normalized = path.replace("\\", "/");
+        int lastSlash = normalized.lastIndexOf("/");
+        return lastSlash == -1 ? normalized : normalized.substring(lastSlash+1);
+    }
 
     private static void scanRWSFile(RandomAccessFile file) throws IOException { //checking if 4 bytes is a header
         long offset = 0;
@@ -150,6 +170,36 @@ public class Main {
                     payloadSize,
                     libraryId
             );
+            if (fileType == RWSFileType.RESOURCE){
+                int metadataSize = readUInt32LE(file);
+                String logicalName = readPaddedString(file);
+
+                byte[] guid = new byte[16]; // GUID are 16 bytes
+                file.readFully(guid);
+
+                String resourceType = readPaddedString(file);
+                String sourcePath = readPaddedString(file);
+                String texturePath = readPaddedString(file);
+                System.out.println("rType:" + resourceType + "," + "source Path:" + sourcePath + ", " + "texturePath: " + texturePath);
+                int metadataTail = readUInt32LE(file);
+                int dataSize = readUInt32LE(file);
+                //generate filepath
+
+                String basename = extractBasename(logicalName);
+                String safeName = sanitizeName(basename);
+                String extension = getExtensionForType(safeName, resourceType, sourcePath);
+                String directoryName = getDirectoryForType(resourceType);
+
+                File outputDir = new File("extracted_RWS", directoryName);
+                outputDir.mkdirs();
+                File outputFile = new File(outputDir, safeName + extension);
+
+                //Read data from RWS and save to disk
+
+
+                //TODO
+            }
+
 
             offset = offset + 12L + payloadSize;
 
