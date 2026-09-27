@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Scanner;
 import java.util.Map;
@@ -151,13 +152,15 @@ public class Main {
 
     private static void scanRWSFile(RandomAccessFile file) throws IOException { //checking if 4 bytes is a header
         long offset = 0;
+        long payloadOffset = 0;
+        long recordEnd;
         long fileSize = file.length();
         int recordNumber = 0;
         while (offset < fileSize) {
             file.seek(offset);
 
             int type = readUInt32LE(file);
-            int payloadSize = readUInt32LE(file);
+            long payloadSize = Integer.toUnsignedLong(readUInt32LE(file));
             int libraryId = readUInt32LE(file);
 
             RWSFileType fileType = detectFileType(type);
@@ -196,17 +199,44 @@ public class Main {
 
                 //Read data from RWS and save to disk
 
+                byte[] assetData = new byte[dataSize];
+                file.readFully(assetData);
 
-                //TODO
+                //zapis do pliku
+
+                try {
+                    Files.write(outputFile.toPath(), assetData);
+                    System.out.println("Extracted: " + outputFile.getAbsolutePath());
+                } catch (IOException e) {
+                    System.err.println("Error writing to file: " + e.getMessage());
+                }
+
+                int paddingSize = (4 - (dataSize % 4)) % 4; // Calculate padding size to align to 4 bytes
+                file.skipBytes(paddingSize); // Skip padding bytes
+
+                long expectedRecordEnd = offset + 12L + payloadSize;
+                if (file.getFilePointer() != expectedRecordEnd) {
+                    throw new IOException("Parser position mismatch at record " + (recordNumber - 1) +
+                            ": expected " + expectedRecordEnd + ", actual " + file.getFilePointer());
+                }
             }
 
 
-            offset = offset + 12L + payloadSize;
 
-            if (payloadSize < 0) {
-                throw new IOException("Invalid payload size at offset " + offset);
+            payloadOffset = offset + 12; // 12 bytes for type, payloadSize, and libraryId
+            recordEnd = payloadOffset + payloadSize;
+
+            if (recordEnd > fileSize) {
+                throw new IOException("Record at offset " + offset + " exceeds file size.");
             }
+
+            file.seek(recordEnd); // Move to the end of the current record
+            offset = recordEnd;
+
+
         }
+
+
     }
 
     public static void main(String[] args) {

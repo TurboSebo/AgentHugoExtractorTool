@@ -40,3 +40,4 @@ build/
 
 #other#
 *.RWS
+/extracted_RWS/
