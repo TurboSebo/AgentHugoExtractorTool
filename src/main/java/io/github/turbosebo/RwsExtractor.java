@@ -5,7 +5,10 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class RwsExtractor {
     private static final int RWS_RESOURCE = 0x716;
@@ -49,11 +52,13 @@ public class RwsExtractor {
     );
 
     public void extract(File inputFile) throws IOException {
+        usedPaths.clear();
         try (RandomAccessFile file = new RandomAccessFile(inputFile, "r")) {
             scanRWSFile(file);
         }
     }
 
+    private final Set<String> usedPaths = new HashSet<>();
     private void scanRWSFile(RandomAccessFile file) throws IOException {
         long offset = 0;
         long fileSize = file.length();
@@ -69,7 +74,7 @@ public class RwsExtractor {
             RwsFileType fileType = detectFileType(type);
             System.out.printf(
                     "Record=%d offset=%d type=0x%X (%s) payloadSize=%d libraryId=%d%n",
-                    recordNumber++,
+                    recordNumber,
                     offset,
                     type,
                     fileType,
@@ -78,7 +83,12 @@ public class RwsExtractor {
             );
 
             if (fileType == RwsFileType.RESOURCE) {
-                handleResourceRecord(file, payloadSize, offset);
+                try {
+                    handleResourceRecord(file, payloadSize, offset, recordNumber);
+                } catch (IOException e) {
+                    System.err.println("Failed to handle resource record at offset " + offset + ": " + e.getMessage());
+                    // Skip this record and continue with the next one
+                }
             }
 
             long recordEnd = offset + 12L + payloadSize;
@@ -88,11 +98,31 @@ public class RwsExtractor {
 
             file.seek(recordEnd);
             offset = recordEnd;
+            recordNumber++;
         }
     }
+    private File uniqueFile(File dir, String directoryName, String fileName, int recordNumber) {
+        int dot = fileName.lastIndexOf('.');
+        String base = dot > 0 ? fileName.substring(0, dot) : fileName;
+        String ext = dot > 0 ? fileName.substring(dot) : "";
 
-    private void handleResourceRecord(RandomAccessFile file, long payloadSize, long recordOffset) throws IOException {
-        int metadataSize = readUInt32LE(file);
+        File candidate = new File(dir, fileName);
+        String key = buildPathKey(directoryName, fileName);
+        if (usedPaths.add(key)) {
+            return candidate;
+        }
+
+        String suffixedName = base + String.format("__record_%04d", recordNumber) + ext;
+        usedPaths.add(buildPathKey(directoryName, suffixedName));
+        return new File(dir, suffixedName);
+    }
+
+    private String buildPathKey(String directoryName, String fileName) {
+        return (directoryName + "/" + fileName).toLowerCase(Locale.ROOT);
+    }
+    private void handleResourceRecord(RandomAccessFile file, long payloadSize, long recordOffset, int recordNumber) throws IOException {
+        System.out.println("Handling resource record at offset: " + recordOffset);
+        readUInt32LE(file);
         String logicalName = readPaddedString(file);
 
         byte[] guid = new byte[16];
@@ -103,7 +133,7 @@ public class RwsExtractor {
         String texturePath = readPaddedString(file);
         System.out.println("rType:" + resourceType + "," + "source Path:" + sourcePath + ", " + "texturePath: " + texturePath);
 
-        int metadataTail = readUInt32LE(file);
+        readUInt32LE(file);
         int dataSize = readUInt32LE(file);
 
         String basename = extractBasename(logicalName);
@@ -112,9 +142,11 @@ public class RwsExtractor {
         String directoryName = getDirectoryForType(resourceType);
 
         File outputDir = new File("extracted_RWS", directoryName);
-        outputDir.mkdirs();
-
-        File outputFile = new File(outputDir, safeName + extension);
+        if (!outputDir.exists() && !outputDir.mkdirs()) {
+            throw new IOException("Failed to create output directory: " + outputDir);
+        }
+        File outputFile = uniqueFile(outputDir, directoryName, safeName + extension, recordNumber);
+        System.out.println("Path: " + outputFile.toPath());
 
         byte[] assetData = new byte[dataSize];
         file.readFully(assetData);
@@ -124,6 +156,7 @@ public class RwsExtractor {
             System.out.println("Extracted: " + outputFile.getAbsolutePath());
         } catch (IOException e) {
             System.err.println("Error writing to file: " + e.getMessage());
+            throw e;
         }
 
         int paddingSize = (4 - (dataSize % 4)) % 4;
@@ -134,6 +167,7 @@ public class RwsExtractor {
             throw new IOException("Parser position mismatch at record start " + recordOffset +
                     ": expected " + expectedRecordEnd + ", actual " + file.getFilePointer());
         }
+
     }
 
     private String getDirectoryForType(String resourceType) {
