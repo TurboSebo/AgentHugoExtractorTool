@@ -64,12 +64,18 @@ public class RwsExtractor {
         long fileSize = file.length();
         int recordNumber = 0;
 
+
         while (offset < fileSize) {
             file.seek(offset);
 
             int type = readUInt32LE(file);
             long payloadSize = Integer.toUnsignedLong(readUInt32LE(file));
             int libraryId = readUInt32LE(file);
+
+            long recordEnd = offset + 12L + payloadSize;
+            if (recordEnd > fileSize) {
+                throw new IOException("Record at offset " + offset + " exceeds file size.");
+            }
 
             RwsFileType fileType = detectFileType(type);
             System.out.printf(
@@ -83,18 +89,9 @@ public class RwsExtractor {
             );
 
             if (fileType == RwsFileType.RESOURCE) {
-                try {
                     handleResourceRecord(file, payloadSize, offset, recordNumber);
-                } catch (IOException e) {
-                    System.err.println("Failed to handle resource record at offset " + offset + ": " + e.getMessage());
-                    // Skip this record and continue with the next one
-                }
             }
 
-            long recordEnd = offset + 12L + payloadSize;
-            if (recordEnd > fileSize) {
-                throw new IOException("Record at offset " + offset + " exceeds file size.");
-            }
 
             file.seek(recordEnd);
             offset = recordEnd;
