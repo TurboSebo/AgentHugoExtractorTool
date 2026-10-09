@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="AgentHugoExtractorTool:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/AgentHugoExtractorTool_jar</output-path>
+    <root id="archive" name="AgentHugoExtractorTool.jar">
+      <element id="module-output" name="AgentHugoExtractorTool" />
+    </root>
+  </artifact>
+</component>
