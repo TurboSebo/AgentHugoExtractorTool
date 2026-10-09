@@ -119,19 +119,53 @@ public class RwsExtractor {
     }
     private void handleResourceRecord(RandomAccessFile file, long payloadSize, long recordOffset, int recordNumber) throws IOException {
         System.out.println("Handling resource record at offset: " + recordOffset);
+        long expectedRecordEnd = recordOffset + 12L + payloadSize;
+
         readUInt32LE(file);
-        String logicalName = readPaddedString(file);
+        String logicalName = readPaddedString(file, expectedRecordEnd);
 
         byte[] guid = new byte[16];
+        if (file.getFilePointer() + guid.length > expectedRecordEnd) {
+            throw new IOException("GUID exceeds record boundary at offset " + recordOffset
+                    + ": pointer=" + file.getFilePointer() + ", limit=" + expectedRecordEnd);
+        }
         file.readFully(guid);
 
-        String resourceType = readPaddedString(file);
-        String sourcePath = readPaddedString(file);
-        String texturePath = readPaddedString(file);
+        String resourceType = readPaddedString(file, expectedRecordEnd);
+        String sourcePath = readPaddedString(file, expectedRecordEnd);
+        String texturePath = readPaddedString(file, expectedRecordEnd);
         System.out.println("rType:" + resourceType + "," + "source Path:" + sourcePath + ", " + "texturePath: " + texturePath);
 
         readUInt32LE(file);
-        int dataSize = readUInt32LE(file);
+        long dataSize = readUInt32LEAsLong(file);
+
+        long dataStart = file.getFilePointer();
+        long dataEnd = dataStart + dataSize;
+        if (dataEnd > expectedRecordEnd) {
+            throw new IOException("Resource data exceeds record boundary at offset " + recordOffset
+                    + ": dataEnd=" + dataEnd + ", expectedRecordEnd=" + expectedRecordEnd
+                    + ", dataSize=" + dataSize);
+        }
+        if (dataSize > Integer.MAX_VALUE) {
+            throw new IOException("Resource data too large for byte[] at offset " + recordOffset
+                    + ": dataSize=" + dataSize + " exceeds Integer.MAX_VALUE");
+        }
+
+        byte[] assetData = new byte[(int) dataSize];
+        file.readFully(assetData);
+
+        long paddingSize = (4 - (dataSize % 4)) % 4;
+        long actualPointerAfterData = file.getFilePointer();
+        long expectedPointerAfterPadding = actualPointerAfterData + paddingSize;
+        if (expectedPointerAfterPadding != expectedRecordEnd) {
+            throw new IOException("Record padding mismatch at offset " + recordOffset + ": expected pointer "
+                    + expectedRecordEnd + " after padding, but actual pointer is " + expectedPointerAfterPadding
+                    + " (dataSize=" + dataSize + ", paddingSize=" + paddingSize + ")");
+        }
+
+        if (paddingSize > 0) {
+            file.seek(expectedRecordEnd);
+        }
 
         String basename = extractBasename(logicalName);
         String safeName = sanitizeName(basename);
@@ -142,11 +176,9 @@ public class RwsExtractor {
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new IOException("Failed to create output directory: " + outputDir);
         }
+
         File outputFile = uniqueFile(outputDir, directoryName, safeName + extension, recordNumber);
         System.out.println("Path: " + outputFile.toPath());
-
-        byte[] assetData = new byte[dataSize];
-        file.readFully(assetData);
 
         try {
             Files.write(outputFile.toPath(), assetData);
@@ -155,16 +187,6 @@ public class RwsExtractor {
             System.err.println("Error writing to file: " + e.getMessage());
             throw e;
         }
-
-        int paddingSize = (4 - (dataSize % 4)) % 4;
-        file.skipBytes(paddingSize);
-
-        long expectedRecordEnd = recordOffset + 12L + payloadSize;
-        if (file.getFilePointer() != expectedRecordEnd) {
-            throw new IOException("Parser position mismatch at record start " + recordOffset +
-                    ": expected " + expectedRecordEnd + ", actual " + file.getFilePointer());
-        }
-
     }
 
     private String getDirectoryForType(String resourceType) {
@@ -195,13 +217,27 @@ public class RwsExtractor {
                 | (((int) bytes[3] & 0xFF) << 24);
     }
 
-    private String readPaddedString(RandomAccessFile file) throws IOException {
-        int paddedSize = readUInt32LE(file);
+    private long readUInt32LEAsLong(RandomAccessFile file) throws IOException {
+        return Integer.toUnsignedLong(readUInt32LE(file));
+    }
+
+    private String readPaddedString(RandomAccessFile file, long limit) throws IOException {
+        long paddedSize = readUInt32LEAsLong(file);
         if (paddedSize % 4 != 0) {
             throw new IOException("Wrong paddedSize: " + paddedSize);
         }
+        if (paddedSize > Integer.MAX_VALUE) {
+            throw new IOException("Padded string too large: " + paddedSize + " exceeds Integer.MAX_VALUE");
+        }
 
-        byte[] buffer = new byte[paddedSize];
+        long currentPosition = file.getFilePointer();
+        long requiredEnd = currentPosition + paddedSize;
+        if (requiredEnd > limit) {
+            throw new IOException("String exceeds record limit: paddedSize=" + paddedSize
+                    + ", currentPosition=" + currentPosition + ", limit=" + limit);
+        }
+
+        byte[] buffer = new byte[(int) paddedSize];
         file.readFully(buffer);
 
         int length = 0;
