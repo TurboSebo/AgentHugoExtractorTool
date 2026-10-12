@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -51,14 +53,25 @@ public class RwsExtractor {
             Map.entry("LUA", "scripts")
     );
 
-    public void extract(File inputFile) throws IOException {
-        usedPaths.clear();
-        try (RandomAccessFile file = new RandomAccessFile(inputFile, "r")) {
-            scanRWSFile(file);
+    private final Set<String> usedPaths = new HashSet<>();
+    private final List<ExportManifest.ExportedResource> exportedResources = new ArrayList<>();
+    private ExportManifest.Format manifestFormat = ExportManifest.Format.CSV;
+
+    public void setManifestFormat(ExportManifest.Format manifestFormat) {
+        if (manifestFormat != null) {
+            this.manifestFormat = manifestFormat;
         }
     }
 
-    private final Set<String> usedPaths = new HashSet<>();
+    public void extract(File inputFile) throws IOException {
+        usedPaths.clear();
+        exportedResources.clear();
+        try (RandomAccessFile file = new RandomAccessFile(inputFile, "r")) {
+            scanRWSFile(file);
+        }
+        writeManifest();
+    }
+
     private void scanRWSFile(RandomAccessFile file) throws IOException {
         long offset = 0;
         long fileSize = file.length();
@@ -66,14 +79,15 @@ public class RwsExtractor {
 
 
         while (offset < fileSize) {
-            file.seek(offset);
+            //file.seek(offset); //probably unnecessary
 
             int type = readUInt32LE(file);
             long payloadSize = Integer.toUnsignedLong(readUInt32LE(file));
             int libraryId = readUInt32LE(file);
 
-            long recordEnd = offset + 12L + payloadSize;
+            long recordEnd = offset + 12L + payloadSize; // end of record is offset + 12 bytes of header + data
             if (recordEnd > fileSize) {
+                // if recordEnd is further than fileSize that probably means file is corrupted
                 throw new IOException("Record at offset " + offset + " exceeds file size.");
             }
 
@@ -121,7 +135,7 @@ public class RwsExtractor {
         System.out.println("Handling resource record at offset: " + recordOffset);
         long expectedRecordEnd = recordOffset + 12L + payloadSize;
 
-        readUInt32LE(file);
+        int metadataSize = readUInt32LE(file);
         String logicalName = readPaddedString(file, expectedRecordEnd);
 
         byte[] guid = new byte[16];
@@ -187,6 +201,39 @@ public class RwsExtractor {
             System.err.println("Error writing to file: " + e.getMessage());
             throw e;
         }
+
+        exportedResources.add(new ExportManifest.ExportedResource(
+                logicalName,
+                toGuidString(guid),
+                resourceType,
+                sourcePath,
+                texturePath,
+                metadataSize,
+                dataSize,
+                outputFile.getAbsolutePath()
+        ));
+    }
+
+    private void writeManifest() throws IOException {
+        File manifestDir = new File("extracted_RWS");
+        if (!manifestDir.exists() && !manifestDir.mkdirs()) {
+            throw new IOException("Failed to create manifest directory: " + manifestDir.getAbsolutePath());
+        }
+
+        ExportManifest.write(manifestDir, exportedResources, manifestFormat);
+        System.out.println("Manifest written to: " + new File(manifestDir, "export_manifest." + manifestFormat.getExtension()).getAbsolutePath());
+    }
+
+    private String toGuidString(byte[] guid) {
+        if (guid == null || guid.length == 0) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder(guid.length * 2);
+        for (byte b : guid) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     private String getDirectoryForType(String resourceType) {
@@ -309,4 +356,3 @@ public class RwsExtractor {
         UNKNOWN
     }
 }
-
