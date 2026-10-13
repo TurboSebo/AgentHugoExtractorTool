@@ -16,7 +16,7 @@ public class RwsExtractor {
     private static final int RWS_RESOURCE = 0x716;
     private static final int RWS_OBJECT = 0x704;
     private static final int RWS_CLASS = 0x71C;
-
+    private static final File EXPORT_ROOT_DIR = new File("extracted_RWS");
     private static final Map<String, String> EXTENSIONS_BY_TYPE = Map.ofEntries(
             Map.entry("rwID_CLUMP", ".dff"),
             Map.entry("rwID_HANIMANIMATION", ".anm"),
@@ -69,7 +69,7 @@ public class RwsExtractor {
         try (RandomAccessFile file = new RandomAccessFile(inputFile, "r")) {
             scanRWSFile(file);
         }
-        writeManifest();
+        writeManifest(EXPORT_ROOT_DIR);
     }
 
     private void scanRWSFile(RandomAccessFile file) throws IOException {
@@ -186,12 +186,12 @@ public class RwsExtractor {
         String extension = getExtensionForType(safeName, resourceType, sourcePath);
         String directoryName = getDirectoryForType(resourceType);
 
-        File outputDir = new File("extracted_RWS", directoryName);
-        if (!outputDir.exists() && !outputDir.mkdirs()) {
-            throw new IOException("Failed to create output directory: " + outputDir);
+        File resourceOutputDir = new File(EXPORT_ROOT_DIR, directoryName);
+        if (!resourceOutputDir.exists() && !resourceOutputDir.mkdirs()) {
+            throw new IOException("Failed to create output directory: " + resourceOutputDir);
         }
 
-        File outputFile = uniqueFile(outputDir, directoryName, safeName + extension, recordNumber);
+        File outputFile = uniqueFile(resourceOutputDir, directoryName, safeName + extension, recordNumber);
         System.out.println("Path: " + outputFile.toPath());
 
         try {
@@ -203,6 +203,7 @@ public class RwsExtractor {
         }
 
         exportedResources.add(new ExportManifest.ExportedResource(
+                recordNumber,
                 logicalName,
                 toGuidString(guid),
                 resourceType,
@@ -210,18 +211,17 @@ public class RwsExtractor {
                 texturePath,
                 metadataSize,
                 dataSize,
-                outputFile.getAbsolutePath()
+                EXPORT_ROOT_DIR.toPath().relativize(outputFile.toPath()).toString()
         ));
     }
 
-    private void writeManifest() throws IOException {
-        File manifestDir = new File("extracted_RWS");
-        if (!manifestDir.exists() && !manifestDir.mkdirs()) {
-            throw new IOException("Failed to create manifest directory: " + manifestDir.getAbsolutePath());
+    private void writeManifest(File exportRootDir) throws IOException {
+        if (!exportRootDir.exists() && !exportRootDir.mkdirs()) {
+            throw new IOException("Failed to create manifest directory: " + exportRootDir.getAbsolutePath());
         }
 
-        ExportManifest.write(manifestDir, exportedResources, manifestFormat);
-        System.out.println("Manifest written to: " + new File(manifestDir, "export_manifest." + manifestFormat.getExtension()).getAbsolutePath());
+        ExportManifest.write(exportRootDir, exportedResources, manifestFormat);
+        System.out.println("Manifest written to: " + new File(exportRootDir, "export_manifest." + manifestFormat.getExtension()).getAbsolutePath());
     }
 
     private String toGuidString(byte[] guid) {

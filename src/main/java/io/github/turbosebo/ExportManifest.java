@@ -23,6 +23,7 @@ public final class ExportManifest {
     }
 
     public record ExportedResource(
+            int recordNumber,
             String logicalName,
             String guid,
             String resourceType,
@@ -56,9 +57,9 @@ public final class ExportManifest {
         StringBuilder sb = new StringBuilder();
 
         if (format == Format.TXT) {
-            sb.append("logicalName\tguid\tresourceType\tsourcePath\ttexturePath\tmetadataSize\tdataSize\toutputPath\n");
+            sb.append("recordNumber\tlogicalName\tguid\tresourceType\tsourcePath\ttexturePath\tmetadataSize\tdataSize\toutputPath\n");
         } else {
-            sb.append("logicalName;guid;resourceType;sourcePath;texturePath;metadataSize;dataSize;outputPath\n");
+            sb.append("recordNumber;logicalName;guid;resourceType;sourcePath;texturePath;metadataSize;dataSize;outputPath\n");
         }
 
         if (records == null) {
@@ -67,7 +68,8 @@ public final class ExportManifest {
 
         for (ExportedResource record : records) {
             if (format == Format.TXT) {
-                sb.append(nullToEmpty(record.logicalName())).append('\t')
+                sb.append(record.recordNumber()).append('\t')
+                        .append(nullToEmpty(record.logicalName())).append('\t')
                         .append(nullToEmpty(record.guid())).append('\t')
                         .append(nullToEmpty(record.resourceType())).append('\t')
                         .append(nullToEmpty(record.sourcePath())).append('\t')
@@ -76,7 +78,8 @@ public final class ExportManifest {
                         .append(record.dataSize()).append('\t')
                         .append(nullToEmpty(record.outputPath())).append('\n');
             } else {
-                sb.append(escapeCsv(record.logicalName())).append(';')
+                sb.append(record.recordNumber()).append(';')
+                        .append(escapeCsv(record.logicalName())).append(';')
                         .append(escapeCsv(record.guid())).append(';')
                         .append(escapeCsv(record.resourceType())).append(';')
                         .append(escapeCsv(record.sourcePath())).append(';')
