@@ -10,6 +10,7 @@ public final class CliArguments {
         public ExportManifest.Format manifestFormat = ExportManifest.Format.CSV;
         public File outputDir = new File("extracted_RWS");
         public String filePath;
+        public boolean about;
     }
 
     private CliArguments() {
@@ -23,6 +24,7 @@ public final class CliArguments {
             switch (arg) {
                 case "--help", "-h" -> options.help = true;
                 case "--manifest-only", "-m" -> options.manifestOnly = true;
+                case "--about", "-a" -> options.about = true;
                 case "--manifest-format" -> {
                     if (i + 1 >= args.length) {
                         throw new IllegalArgumentException("Missing value for --manifest-format");
@@ -66,6 +68,30 @@ public final class CliArguments {
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("Unsupported manifest format: " + value + ". Allowed values: csv, txt");
         }
+    }
+    public static void printAboutInfo() {
+        System.out.println("Agent Hugo Extractor Tool");
+        System.out.println("Version: v0.1.0-alpha.1");
+        System.out.println("Author: Turbosebo");
+        System.out.println("Webpage: https://github.com/turbosebo/AgentHugoExtractorTool");
+        System.out.println();
+        System.out.print("""
+            GNU General Public License v3
+            Copyright (C) 2026 Turbosebo
+
+            This program is free software: you can redistribute it and/or modify
+            it under the terms of the GNU General Public License as published by
+            the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+
+            This program is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU General Public License for more details.
+
+            You should have received a copy of the GNU General Public License
+            along with this program. If not, see <https://www.gnu.org/licenses/>.
+            """);
     }
 
     public static void printUsage() {

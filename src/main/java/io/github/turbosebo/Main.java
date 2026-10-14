@@ -14,7 +14,10 @@ public class Main {
             System.exit(-1);
             return;
         }
-
+        if (options.about) {
+            CliArguments.printAboutInfo();
+            return;
+        }
         if (options.help) {
             CliArguments.printUsage();
             return;
