@@ -1,26 +1,37 @@
 package io.github.turbosebo;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Scanner;
 
 public class Main {
     public static void main(String[] args) {
-        String filePath;
+        final CliArguments.Options options;
+        try {
+            options = CliArguments.parse(args);
+        } catch (IllegalArgumentException ex) {
+            System.err.println(ex.getMessage());
+            CliArguments.printUsage();
+            System.exit(-1);
+            return;
+        }
 
-        if (args.length == 0) {
-            Scanner scanner = new Scanner(System.in);
-            System.out.print("Please input file relative path: ");
-            String input = scanner.nextLine();
-            if (input.isEmpty()) {
-                System.out.println("No input provided. Using default: DOWNTOWN.RWS");
-                filePath = "DOWNTOWN.RWS";
-            } else {
-                filePath = input;
+        if (options.help) {
+            CliArguments.printUsage();
+            return;
+        }
+
+        String filePath = options.filePath;
+        if (filePath == null || filePath.isBlank()) {
+            try (Scanner scanner = new Scanner(System.in)) {
+                System.out.print("Please input file relative path: ");
+                String input = scanner.nextLine();
+                if (input.isEmpty()) {
+                    System.out.println("No input provided. Using default: DOWNTOWN.RWS");
+                    filePath = "DOWNTOWN.RWS";
+                } else {
+                    filePath = input;
+                }
             }
-            scanner.close();
-        } else {
-            filePath = args[0];
         }
 
         filePath = filePath.replace("\\", "/");
@@ -32,8 +43,12 @@ public class Main {
         }
 
         try {
-            new RwsExtractor().extract(inputFile);
-        } catch (IOException e) {
+            RwsExtractor extractor = new RwsExtractor();
+            extractor.setExportRootDir(options.outputDir);
+            extractor.setManifestFormat(options.manifestFormat);
+            extractor.setManifestOnly(options.manifestOnly);
+            extractor.extract(inputFile);
+        } catch (Exception e) {
             System.err.println(e.getMessage());
             System.exit(-1);
         }

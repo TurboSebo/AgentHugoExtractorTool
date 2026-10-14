@@ -16,7 +16,7 @@ public class RwsExtractor {
     private static final int RWS_RESOURCE = 0x716;
     private static final int RWS_OBJECT = 0x704;
     private static final int RWS_CLASS = 0x71C;
-    private static final File EXPORT_ROOT_DIR = new File("extracted_RWS");
+    private static final File DEFAULT_EXPORT_ROOT_DIR = new File("extracted_RWS");
     private static final Map<String, String> EXTENSIONS_BY_TYPE = Map.ofEntries(
             Map.entry("rwID_CLUMP", ".dff"),
             Map.entry("rwID_HANIMANIMATION", ".anm"),
@@ -56,6 +56,8 @@ public class RwsExtractor {
     private final Set<String> usedPaths = new HashSet<>();
     private final List<ExportManifest.ExportedResource> exportedResources = new ArrayList<>();
     private ExportManifest.Format manifestFormat = ExportManifest.Format.CSV;
+    private File exportRootDir = DEFAULT_EXPORT_ROOT_DIR;
+    private boolean manifestOnly;
 
     public void setManifestFormat(ExportManifest.Format manifestFormat) {
         if (manifestFormat != null) {
@@ -63,20 +65,31 @@ public class RwsExtractor {
         }
     }
 
+    public void setExportRootDir(File exportRootDir) {
+        if (exportRootDir != null) {
+            this.exportRootDir = exportRootDir;
+        }
+    }
+
+    public void setManifestOnly(boolean manifestOnly) {
+        this.manifestOnly = manifestOnly;
+    }
+
     public void extract(File inputFile) throws IOException {
         usedPaths.clear();
         exportedResources.clear();
+
         try (RandomAccessFile file = new RandomAccessFile(inputFile, "r")) {
             scanRWSFile(file);
         }
-        writeManifest(EXPORT_ROOT_DIR);
+
+        writeManifest(exportRootDir);
     }
 
     private void scanRWSFile(RandomAccessFile file) throws IOException {
         long offset = 0;
         long fileSize = file.length();
         int recordNumber = 0;
-
 
         while (offset < fileSize) {
             //file.seek(offset); //probably unnecessary
@@ -103,15 +116,15 @@ public class RwsExtractor {
             );
 
             if (fileType == RwsFileType.RESOURCE) {
-                    handleResourceRecord(file, payloadSize, offset, recordNumber);
+                handleResourceRecord(file, payloadSize, offset, recordNumber);
             }
-
 
             file.seek(recordEnd);
             offset = recordEnd;
             recordNumber++;
         }
     }
+
     private File uniqueFile(File dir, String directoryName, String fileName, int recordNumber) {
         int dot = fileName.lastIndexOf('.');
         String base = dot > 0 ? fileName.substring(0, dot) : fileName;
@@ -131,6 +144,7 @@ public class RwsExtractor {
     private String buildPathKey(String directoryName, String fileName) {
         return (directoryName + "/" + fileName).toLowerCase(Locale.ROOT);
     }
+
     private void handleResourceRecord(RandomAccessFile file, long payloadSize, long recordOffset, int recordNumber) throws IOException {
         System.out.println("Handling resource record at offset: " + recordOffset);
         long expectedRecordEnd = recordOffset + 12L + payloadSize;
@@ -148,7 +162,7 @@ public class RwsExtractor {
         String resourceType = readPaddedString(file, expectedRecordEnd);
         String sourcePath = readPaddedString(file, expectedRecordEnd);
         String texturePath = readPaddedString(file, expectedRecordEnd);
-        System.out.println("rType:" + resourceType + "," + "source Path:" + sourcePath + ", " + "texturePath: " + texturePath);
+        System.out.println("rType:" + resourceType + ",source Path:" + sourcePath + ", texturePath: " + texturePath);
 
         readUInt32LE(file);
         long dataSize = readUInt32LEAsLong(file);
@@ -186,20 +200,24 @@ public class RwsExtractor {
         String extension = getExtensionForType(safeName, resourceType, sourcePath);
         String directoryName = getDirectoryForType(resourceType);
 
-        File resourceOutputDir = new File(EXPORT_ROOT_DIR, directoryName);
-        if (!resourceOutputDir.exists() && !resourceOutputDir.mkdirs()) {
+        File resourceOutputDir = new File(exportRootDir, directoryName);
+        if (!manifestOnly && (!resourceOutputDir.exists() && !resourceOutputDir.mkdirs())) {
             throw new IOException("Failed to create output directory: " + resourceOutputDir);
         }
 
         File outputFile = uniqueFile(resourceOutputDir, directoryName, safeName + extension, recordNumber);
         System.out.println("Path: " + outputFile.toPath());
 
-        try {
-            Files.write(outputFile.toPath(), assetData);
-            System.out.println("Extracted: " + outputFile.getAbsolutePath());
-        } catch (IOException e) {
-            System.err.println("Error writing to file: " + e.getMessage());
-            throw e;
+        if (!manifestOnly) {
+            try {
+                Files.write(outputFile.toPath(), assetData);
+                System.out.println("Extracted: " + outputFile.getAbsolutePath());
+            } catch (IOException e) {
+                System.err.println("Error writing to file: " + e.getMessage());
+                throw e;
+            }
+        } else {
+            System.out.println("Skipping file extraction because --manifest-only was set.");
         }
 
         exportedResources.add(new ExportManifest.ExportedResource(
@@ -211,7 +229,7 @@ public class RwsExtractor {
                 texturePath,
                 metadataSize,
                 dataSize,
-                EXPORT_ROOT_DIR.toPath().relativize(outputFile.toPath()).toString()
+                exportRootDir.toPath().relativize(outputFile.toPath()).toString()
         ));
     }
 
@@ -278,8 +296,8 @@ public class RwsExtractor {
         }
 
         long currentPosition = file.getFilePointer();
-        long requiredEnd = currentPosition + paddedSize;
-        if (requiredEnd > limit) {
+        long required_end = currentPosition + paddedSize;
+        if (required_end > limit) {
             throw new IOException("String exceeds record limit: paddedSize=" + paddedSize
                     + ", currentPosition=" + currentPosition + ", limit=" + limit);
         }
