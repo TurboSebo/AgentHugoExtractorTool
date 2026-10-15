@@ -46,8 +46,12 @@ public class Main {
         }
 
         try {
+            File exportRootDir = options.outputDir != null
+                    ? options.outputDir
+                    : ExportPathResolver.createDefaultExportDir(filePath);
+
             RwsExtractor extractor = new RwsExtractor();
-            extractor.setExportRootDir(options.outputDir);
+            extractor.setExportRootDir(exportRootDir);
             extractor.setManifestFormat(options.manifestFormat);
             extractor.setManifestOnly(options.manifestOnly);
             extractor.extract(inputFile);

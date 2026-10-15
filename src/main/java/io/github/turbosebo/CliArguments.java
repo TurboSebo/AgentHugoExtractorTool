@@ -8,7 +8,7 @@ public final class CliArguments {
         public boolean help;
         public boolean manifestOnly;
         public ExportManifest.Format manifestFormat = ExportManifest.Format.CSV;
-        public File outputDir = new File("extracted_RWS");
+        public File outputDir = null;
         public String filePath;
         public boolean about;
     }
@@ -71,7 +71,7 @@ public final class CliArguments {
     }
     public static void printAboutInfo() {
         System.out.println("Agent Hugo Extractor Tool");
-        System.out.println("Version: v0.1.0-alpha.1");
+        System.out.println("Version: v0.2.0-alpha.2");
         System.out.println("Author: Turbosebo");
         System.out.println("Webpage: https://github.com/turbosebo/AgentHugoExtractorTool");
         System.out.println();
@@ -104,4 +104,3 @@ public final class CliArguments {
         System.out.println("  --help, -h                 Show this help");
     }
 }
-
