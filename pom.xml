@@ -6,7 +6,7 @@
 
     <groupId>io.github.turbosebo</groupId>
     <artifactId>AgentHugoExtractorTool</artifactId>
-    <version>0.2.0-alpha.2</version>
+    <version>0.2.1-alpha.2</version>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
@@ -25,6 +25,22 @@
 
     <build>
         <finalName>AgentHugoExtractorTool</finalName>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <includes>
+                    <include>META-INF/MANIFEST.MF</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>version.properties</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -40,6 +56,9 @@
                         <manifest>
                             <mainClass>io.github.turbosebo.Main</mainClass>
                         </manifest>
+                        <manifestEntries>
+                            <Implementation-Version>${project.version}</Implementation-Version>
+                        </manifestEntries>
                     </archive>
                 </configuration>
             </plugin>

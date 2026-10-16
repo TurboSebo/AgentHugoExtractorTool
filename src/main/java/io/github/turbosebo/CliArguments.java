@@ -1,9 +1,14 @@
 package io.github.turbosebo;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
 import java.util.Locale;
 
 public final class CliArguments {
+    private static final String APP_VERSION = loadAppVersion();
+
     public static final class Options {
         public boolean help;
         public boolean manifestOnly;
@@ -71,7 +76,7 @@ public final class CliArguments {
     }
     public static void printAboutInfo() {
         System.out.println("Agent Hugo Extractor Tool");
-        System.out.println("Version: v0.2.0-alpha.2");
+        System.out.println("Version: " + APP_VERSION);
         System.out.println("Author: Turbosebo");
         System.out.println("Webpage: https://github.com/turbosebo/AgentHugoExtractorTool");
         System.out.println();
@@ -94,6 +99,29 @@ public final class CliArguments {
             """);
     }
 
+
+    private static String loadAppVersion() {
+        try (InputStream inputStream = CliArguments.class.getResourceAsStream("/version.properties")) {
+            if (inputStream != null) {
+                Properties properties = new Properties();
+                properties.load(inputStream);
+
+                String version = properties.getProperty("app.version");
+                if (version != null && !version.isBlank()) {
+                    return version.trim();
+                }
+            }
+        } catch (IOException ignored) {
+            // Fallbacks below.
+        }
+
+        String implementationVersion = CliArguments.class.getPackage().getImplementationVersion();
+        if (implementationVersion != null && !implementationVersion.isBlank()) {
+            return implementationVersion.trim();
+        }
+
+        return "unknown";
+    }
     public static void printUsage() {
         System.out.println("Usage: java -jar AgentHugoExtractorTool.jar [options] <input.rws>");
         System.out.println();
