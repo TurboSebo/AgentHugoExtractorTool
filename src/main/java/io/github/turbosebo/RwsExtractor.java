@@ -149,7 +149,17 @@ public class RwsExtractor {
         System.out.println("Handling resource record at offset: " + recordOffset);
         long expectedRecordEnd = recordOffset + 12L + payloadSize;
 
-        int metadataSize = readUInt32LE(file);
+        long metadataSizeLong = readUInt32LE(file);
+        if (metadataSizeLong > Integer.MAX_VALUE){
+            throw new IOException("Metadata size too large for int at offset " + recordOffset
+                    + ": metadataSize=" + metadataSizeLong + " exceeds Integer.MAX_VALUE");
+        }
+        int metadataSize = (int) metadataSizeLong;
+        long metadataStart = file.getFilePointer();
+        long expectedMetadataEnd = metadataStart + metadataSize;
+
+        if (expectedMetadataEnd + 4L > expectedRecordEnd)throw new IOException("Metadata exceeds record boundary at offset" + recordOffset );
+
         String logicalName = readPaddedString(file, expectedRecordEnd);
 
         byte[] guid = new byte[16];
@@ -164,36 +174,25 @@ public class RwsExtractor {
         String texturePath = readPaddedString(file, expectedRecordEnd);
         System.out.println("rType:" + resourceType + ",source Path:" + sourcePath + ", texturePath: " + texturePath);
 
-        readUInt32LE(file);
-        long dataSize = readUInt32LEAsLong(file);
+        int metadataTail = readUInt32LE(file);
 
+        if (file.getFilePointer() != expectedMetadataEnd) {
+            throw new IOException("Metadata tail mismatch at offset " + recordOffset + ": expected pointer "
+                    + expectedMetadataEnd + ", but actual pointer is " + file.getFilePointer());
+        }
+
+        long dataSize = readUInt32LEAsLong(file);
         long dataStart = file.getFilePointer();
         long dataEnd = dataStart + dataSize;
-        if (dataEnd > expectedRecordEnd) {
-            throw new IOException("Resource data exceeds record boundary at offset " + recordOffset
-                    + ": dataEnd=" + dataEnd + ", expectedRecordEnd=" + expectedRecordEnd
-                    + ", dataSize=" + dataSize);
-        }
-        if (dataSize > Integer.MAX_VALUE) {
-            throw new IOException("Resource data too large for byte[] at offset " + recordOffset
-                    + ": dataSize=" + dataSize + " exceeds Integer.MAX_VALUE");
-        }
+        long paddingSize = (4L - (dataSize % 4L)) % 4;
 
-        byte[] assetData = new byte[(int) dataSize];
-        file.readFully(assetData);
-
-        long paddingSize = (4 - (dataSize % 4)) % 4;
-        long actualPointerAfterData = file.getFilePointer();
-        long expectedPointerAfterPadding = actualPointerAfterData + paddingSize;
-        if (expectedPointerAfterPadding != expectedRecordEnd) {
-            throw new IOException("Record padding mismatch at offset " + recordOffset + ": expected pointer "
-                    + expectedRecordEnd + " after padding, but actual pointer is " + expectedPointerAfterPadding
+        if (dataEnd + paddingSize != expectedRecordEnd) {
+            throw new IOException("Record padding/size mismatch at offset " + recordOffset
+                    + ": expectedRecordEnd=" + expectedRecordEnd
+                    + ", actualAfterPadding=" + (dataEnd + paddingSize)
                     + " (dataSize=" + dataSize + ", paddingSize=" + paddingSize + ")");
         }
 
-        if (paddingSize > 0) {
-            file.seek(expectedRecordEnd);
-        }
 
         String basename = extractBasename(logicalName);
         String safeName = sanitizeName(basename);
@@ -201,25 +200,26 @@ public class RwsExtractor {
         String directoryName = getDirectoryForType(resourceType);
 
         File resourceOutputDir = new File(exportRootDir, directoryName);
-        if (!manifestOnly && (!resourceOutputDir.exists() && !resourceOutputDir.mkdirs())) {
-            throw new IOException("Failed to create output directory: " + resourceOutputDir);
-        }
-
         File outputFile = uniqueFile(resourceOutputDir, directoryName, safeName + extension, recordNumber);
         System.out.println("Path: " + outputFile.toPath());
 
         if (!manifestOnly) {
-            try {
-                Files.write(outputFile.toPath(), assetData);
-                System.out.println("Extracted: " + outputFile.getAbsolutePath());
-            } catch (IOException e) {
-                System.err.println("Error writing to file: " + e.getMessage());
-                throw e;
+            if (dataSize > Integer.MAX_VALUE) {
+                throw new IOException("Resource data too large for byte[] at offset " + recordOffset
+                        + ": dataSize=" + dataSize + " exceeds Integer.MAX_VALUE");
             }
-        } else {
+            if (!resourceOutputDir.exists() && !resourceOutputDir.mkdirs()) {
+                throw new IOException("Resource output dir " + resourceOutputDir + " does not exist and cannot be created");
+            }
+            byte[] assetData = new byte[(int) dataSize];
+            file.readFully(assetData);
+            Files.write(outputFile.toPath(), assetData);
+            System.out.println("Extracted: " + outputFile.getAbsolutePath());
+        }
+            else {
             System.out.println("Skipping file extraction because --manifest-only was set.");
         }
-
+        file.seek(expectedRecordEnd);
         exportedResources.add(new ExportManifest.ExportedResource(
                 recordNumber,
                 logicalName,
@@ -233,13 +233,13 @@ public class RwsExtractor {
         ));
     }
 
-    private void writeManifest(File exportRootDir) throws IOException {
-        if (!exportRootDir.exists() && !exportRootDir.mkdirs()) {
-            throw new IOException("Failed to create manifest directory: " + exportRootDir.getAbsolutePath());
+    private void writeManifest(File manifestDir) throws IOException {
+        if (!manifestDir.exists() && !manifestDir.mkdirs()) {
+            throw new IOException("Failed to create manifest directory: " + manifestDir.getAbsolutePath());
         }
 
-        ExportManifest.write(exportRootDir, exportedResources, manifestFormat);
-        System.out.println("Manifest written to: " + new File(exportRootDir, "export_manifest." + manifestFormat.getExtension()).getAbsolutePath());
+        ExportManifest.write(manifestDir, exportedResources, manifestFormat);
+        System.out.println("Manifest written to: " + new File(manifestDir, "export_manifest." + manifestFormat.getExtension()).getAbsolutePath());
     }
 
     private String toGuidString(byte[] guid) {
@@ -296,8 +296,8 @@ public class RwsExtractor {
         }
 
         long currentPosition = file.getFilePointer();
-        long required_end = currentPosition + paddedSize;
-        if (required_end > limit) {
+        long requiredEnd = currentPosition + paddedSize;
+        if (requiredEnd > limit) {
             throw new IOException("String exceeds record limit: paddedSize=" + paddedSize
                     + ", currentPosition=" + currentPosition + ", limit=" + limit);
         }
@@ -305,11 +305,17 @@ public class RwsExtractor {
         byte[] buffer = new byte[(int) paddedSize];
         file.readFully(buffer);
 
-        int length = 0;
-        while (length < paddedSize && buffer[length] != 0) {
-            length++;
+        int length = -1;
+        for (int i = 0; i < buffer.length; i++) {
+            if (buffer[i] == 0) {
+                length = i;
+                break;
+            }
         }
-        return new String(buffer, 0, length, StandardCharsets.US_ASCII);
+        if (length < 0) {
+            throw new IOException("Missing NUL terminator in string at offset " + currentPosition);
+        }
+        return new String(buffer, 0, length, StandardCharsets.ISO_8859_1);
     }
 
     private String sanitizeName(String originalName) {

@@ -40,5 +40,5 @@ build/
 
 #other#
 *.RWS
-/extracted_RWS/
+/*extracted*/
 /out/artifacts/
