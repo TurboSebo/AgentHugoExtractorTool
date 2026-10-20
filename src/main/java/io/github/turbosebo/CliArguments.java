@@ -12,6 +12,7 @@ public final class CliArguments {
     public static final class Options {
         public boolean help;
         public boolean manifestOnly;
+        public boolean allMips;
         public ExportManifest.Format manifestFormat = ExportManifest.Format.CSV;
         public File outputDir = null;
         public String filePath;
@@ -29,6 +30,7 @@ public final class CliArguments {
             switch (arg) {
                 case "--help", "-h" -> options.help = true;
                 case "--manifest-only", "-m" -> options.manifestOnly = true;
+                case "--all-mips" -> options.allMips = true;
                 case "--about", "-a" -> options.about = true;
                 case "--manifest-format" -> {
                     if (i + 1 >= args.length) {
@@ -128,6 +130,7 @@ public final class CliArguments {
         System.out.println("Options:");
         System.out.println("  --manifest-only, -m        Only generate a manifest without writing extracted files");
         System.out.println("  --manifest-format <csv|txt> Set the manifest file format");
+        System.out.println("  --all-mips                 Export all mip levels for TXD textures");
         System.out.println("  --output-dir, -o <path>    Set the extraction output directory");
         System.out.println("  --help, -h                 Show this help");
     }

@@ -54,6 +54,7 @@ public class Main {
             extractor.setExportRootDir(exportRootDir);
             extractor.setManifestFormat(options.manifestFormat);
             extractor.setManifestOnly(options.manifestOnly);
+            extractor.setExtractAllMips(options.allMips);
             extractor.extract(inputFile);
         } catch (Exception e) {
             System.err.println(e.getMessage());

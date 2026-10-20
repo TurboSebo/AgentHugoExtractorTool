@@ -6,7 +6,7 @@
 
     <groupId>io.github.turbosebo</groupId>
     <artifactId>AgentHugoExtractorTool</artifactId>
-    <version>0.2.1-alpha.2</version>
+    <version>0.3.0-beta.1</version>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>

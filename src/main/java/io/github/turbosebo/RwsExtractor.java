@@ -58,6 +58,7 @@ public class RwsExtractor {
     private ExportManifest.Format manifestFormat = ExportManifest.Format.CSV;
     private File exportRootDir = DEFAULT_EXPORT_ROOT_DIR;
     private boolean manifestOnly;
+    private boolean extractAllMips;
 
     public void setManifestFormat(ExportManifest.Format manifestFormat) {
         if (manifestFormat != null) {
@@ -73,6 +74,10 @@ public class RwsExtractor {
 
     public void setManifestOnly(boolean manifestOnly) {
         this.manifestOnly = manifestOnly;
+    }
+
+    public void setExtractAllMips(boolean extractAllMips) {
+        this.extractAllMips = extractAllMips;
     }
 
     public void extract(File inputFile) throws IOException {
@@ -149,7 +154,7 @@ public class RwsExtractor {
         System.out.println("Handling resource record at offset: " + recordOffset);
         long expectedRecordEnd = recordOffset + 12L + payloadSize;
 
-        long metadataSizeLong = readUInt32LE(file);
+        long metadataSizeLong = readUInt32LEAsLong(file);
         if (metadataSizeLong > Integer.MAX_VALUE){
             throw new IOException("Metadata size too large for int at offset " + recordOffset
                     + ": metadataSize=" + metadataSizeLong + " exceeds Integer.MAX_VALUE");
@@ -213,12 +218,25 @@ public class RwsExtractor {
             }
             byte[] assetData = new byte[(int) dataSize];
             file.readFully(assetData);
+
+            if ("rwID_TEXDICTIONARY".equals(resourceType) && assetData.length >= 4) {
+                int firstChunkId = (assetData[0] & 0xFF)
+                        | ((assetData[1] & 0xFF) << 8)
+                        | ((assetData[2] & 0xFF) << 16)
+                        | ((assetData[3] & 0xFF) << 24);
+
+                if (firstChunkId == PiTxdExtractor.RW_ID_PI_TEXDICTIONARY) {
+                    File texturesPngDir = new File(exportRootDir, "textures_png");
+                    PiTxdExtractor.extract(assetData, texturesPngDir, extractAllMips, manifestOnly, manifestFormat);
+                }
+            }
+
             Files.write(outputFile.toPath(), assetData);
             System.out.println("Extracted: " + outputFile.getAbsolutePath());
-        }
-            else {
+        } else {
             System.out.println("Skipping file extraction because --manifest-only was set.");
         }
+
         file.seek(expectedRecordEnd);
         exportedResources.add(new ExportManifest.ExportedResource(
                 recordNumber,
