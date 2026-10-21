@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import io.github.turbosebo.txd.PiTxdExtractor;
+
 public class RwsExtractor {
     private static final int RWS_RESOURCE = 0x716;
     private static final int RWS_OBJECT = 0x704;
@@ -155,7 +157,7 @@ public class RwsExtractor {
         long expectedRecordEnd = recordOffset + 12L + payloadSize;
 
         long metadataSizeLong = readUInt32LEAsLong(file);
-        if (metadataSizeLong > Integer.MAX_VALUE){
+        if (metadataSizeLong > Integer.MAX_VALUE) {
             throw new IOException("Metadata size too large for int at offset " + recordOffset
                     + ": metadataSize=" + metadataSizeLong + " exceeds Integer.MAX_VALUE");
         }
@@ -163,7 +165,9 @@ public class RwsExtractor {
         long metadataStart = file.getFilePointer();
         long expectedMetadataEnd = metadataStart + metadataSize;
 
-        if (expectedMetadataEnd + 4L > expectedRecordEnd)throw new IOException("Metadata exceeds record boundary at offset" + recordOffset );
+        if (expectedMetadataEnd + 4L > expectedRecordEnd) {
+            throw new IOException("Metadata exceeds record boundary at offset " + recordOffset);
+        }
 
         String logicalName = readPaddedString(file, expectedRecordEnd);
 
@@ -179,7 +183,7 @@ public class RwsExtractor {
         String texturePath = readPaddedString(file, expectedRecordEnd);
         System.out.println("rType:" + resourceType + ",source Path:" + sourcePath + ", texturePath: " + texturePath);
 
-        int metadataTail = readUInt32LE(file);
+        long metadataTail = readUInt32LE(file);
 
         if (file.getFilePointer() != expectedMetadataEnd) {
             throw new IOException("Metadata tail mismatch at offset " + recordOffset + ": expected pointer "
@@ -197,7 +201,6 @@ public class RwsExtractor {
                     + ", actualAfterPadding=" + (dataEnd + paddingSize)
                     + " (dataSize=" + dataSize + ", paddingSize=" + paddingSize + ")");
         }
-
 
         String basename = extractBasename(logicalName);
         String safeName = sanitizeName(basename);
@@ -314,8 +317,8 @@ public class RwsExtractor {
         }
 
         long currentPosition = file.getFilePointer();
-        long requiredEnd = currentPosition + paddedSize;
-        if (requiredEnd > limit) {
+        long required_end = currentPosition + paddedSize;
+        if (required_end > limit) {
             throw new IOException("String exceeds record limit: paddedSize=" + paddedSize
                     + ", currentPosition=" + currentPosition + ", limit=" + limit);
         }
