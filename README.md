@@ -4,7 +4,7 @@ A command-line tool for extracting resources from `.rws` files used by the game 
 
 It scans an RWS file, finds the resource records inside it and saves each one as a separate file.
 
-> **Status: alpha.** The tool is under development. Command-line options and the manifest format may still change between versions.
+> **Status: beta.** The tool is under development. Command-line options and the manifest format may still change between versions.
 
 ## Requirements
 
@@ -31,6 +31,7 @@ If no input file is given, the program asks for a path in the console.
 | `--manifest-only`, `-m` | Only generate the manifest, without writing extracted files |
 | `--manifest-format <csv\|txt>` | Manifest file format (default: `csv`) |
 | `--output-dir`, `-o <path>` | Output directory (default: `extracted_RWS`) |
+| `--all-mips` | Export all mip levels for TXD textures |
 | `--about` | Show version, author and license information |
 | `--help`, `-h` | Show help |
 
