@@ -1,6 +1,7 @@
 package io.github.turbosebo;
 
 import java.io.File;
+import java.util.Locale;
 import java.util.Scanner;
 
 public class Main {
@@ -22,43 +23,56 @@ public class Main {
             CliArguments.printUsage();
             return;
         }
-
         String filePath = options.filePath;
-        if (filePath == null || filePath.isBlank()) {
-            try (Scanner scanner = new Scanner(System.in)) {
-                System.out.print("Please input file relative path: ");
-                String input = scanner.nextLine();
-                if (input.isEmpty()) {
-                    System.out.println("No input provided. Using default: DOWNTOWN.RWS");
-                    filePath = "DOWNTOWN.RWS";
-                } else {
-                    filePath = input;
+        File[] rwsFiles = null;
+        if (!options.allRws) {
+            if (filePath == null || filePath.isBlank()) {
+                try (Scanner scanner = new Scanner(System.in)) {
+                    System.out.print("Please input file relative path: ");
+                    String input = scanner.nextLine();
+                    if (input.isEmpty()) {
+                        System.out.println("No input provided. Using default: DOWNTOWN.RWS");
+                        filePath = "DOWNTOWN.RWS";
+                    } else {
+                        filePath = input;
+                    }
                 }
+            }
+            rwsFiles = new File[] { new File(filePath) };
+        } else {
+            rwsFiles = new File(".").listFiles((dir, name) ->
+                    name.toLowerCase(Locale.ROOT).endsWith(".rws"));
+            if (rwsFiles == null || rwsFiles.length == 0) {
+                System.err.println("No RWS files found in the current directory.");
+                System.exit(-1);
             }
         }
 
-        filePath = filePath.replace("\\", "/");
+        for (File file : rwsFiles) {
+            String currentFilePath = file.getPath().replace("\\", "/");
+            File inputFile = new File(currentFilePath);
+            if (!inputFile.exists()) {
+                System.err.println("File not found: " + inputFile.getAbsolutePath());
+                continue;
+            }
 
-        File inputFile = new File(filePath);
-        if (!inputFile.exists()) {
-            System.err.println("File not found: " + inputFile.getAbsolutePath());
-            System.exit(-1);
-        }
+            try {
+                File exportRootDir = options.outputDir != null
+                        ? options.outputDir
+                        : ExportPathResolver.createDefaultExportDir(currentFilePath);
 
-        try {
-            File exportRootDir = options.outputDir != null
-                    ? options.outputDir
-                    : ExportPathResolver.createDefaultExportDir(filePath);
+                RwsExtractor extractor = new RwsExtractor();
+                extractor.setExportRootDir(exportRootDir);
+                extractor.setManifestFormat(options.manifestFormat);
+                extractor.setManifestOnly(options.manifestOnly);
+                extractor.setExtractAllMips(options.allMips);
+                extractor.extract(inputFile);
 
-            RwsExtractor extractor = new RwsExtractor();
-            extractor.setExportRootDir(exportRootDir);
-            extractor.setManifestFormat(options.manifestFormat);
-            extractor.setManifestOnly(options.manifestOnly);
-            extractor.setExtractAllMips(options.allMips);
-            extractor.extract(inputFile);
-        } catch (Exception e) {
-            System.err.println(e.getMessage());
-            System.exit(-1);
+            } catch (Exception e) {
+                System.err.println("Failed to process file: " + currentFilePath);
+                System.err.println(e.getMessage());
+                continue;
+            }
         }
     }
 }

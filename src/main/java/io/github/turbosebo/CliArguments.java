@@ -17,6 +17,7 @@ public final class CliArguments {
         public File outputDir = null;
         public String filePath;
         public boolean about;
+        public boolean allRws;
     }
 
     private CliArguments() {
@@ -32,6 +33,7 @@ public final class CliArguments {
                 case "--manifest-only", "-m" -> options.manifestOnly = true;
                 case "--all-mips" -> options.allMips = true;
                 case "--about", "-a" -> options.about = true;
+                case "--all-rws" -> options.allRws = true;
                 case "--manifest-format" -> {
                     if (i + 1 >= args.length) {
                         throw new IllegalArgumentException("Missing value for --manifest-format");
@@ -130,6 +132,7 @@ public final class CliArguments {
         System.out.println("Options:");
         System.out.println("  --manifest-only, -m        Only generate a manifest without writing extracted files");
         System.out.println("  --manifest-format <csv|txt> Set the manifest file format");
+        System.out.println("  --all-rws                  Extract all RWS files in the input directory");
         System.out.println("  --all-mips                 Export all mip levels for TXD textures");
         System.out.println("  --output-dir, -o <path>    Set the extraction output directory");
         System.out.println("  --help, -h                 Show this help");
