@@ -50,4 +50,25 @@ class RwsExtractorTest {
         assertTrue(Files.readString(txtManifest.toPath()).contains("recordNumber\tlogicalName\tguid\tresourceType"),
                 "Manifest should contain TXT header");
     }
+
+    @Test
+    void shouldResolveAllRwsFilesFromDirectory() throws IOException {
+        Path rwsDir = Files.createDirectory(tempDir.resolve("rws_dir"));
+        Path first = Files.createFile(rwsDir.resolve("first.rws"));
+        Path second = Files.createFile(rwsDir.resolve("second.rws"));
+        Path nestedDir = Files.createDirectory(rwsDir.resolve("nested"));
+        Files.createFile(nestedDir.resolve("third.rws"));
+
+        CliArguments.Options options = new CliArguments.Options();
+        options.allRws = true;
+        options.filePath = rwsDir.toString();
+
+        File[] files = Main.resolveRwsFiles(options);
+
+        assertTrue(files.length == 2, "Only files from the target directory should be returned");
+        assertTrue(java.util.Arrays.stream(files).map(File::getName).toList().contains("first.rws"));
+        assertTrue(java.util.Arrays.stream(files).map(File::getName).toList().contains("second.rws"));
+        assertTrue(java.util.Arrays.stream(files).map(File::getName).toList().stream().noneMatch(name -> name.equals("third.rws")),
+                "Nested directory files should not be included");
+    }
 }
