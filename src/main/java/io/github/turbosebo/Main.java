@@ -26,6 +26,10 @@ public class Main {
         }
          String filePath = options.filePath;
         File[] rwsFiles = resolveRwsFiles(options);
+        int totalFiles = rwsFiles.length;
+        if (options.outputDir != null && totalFiles > 1) {
+            System.out.println("Multiple RWS files detected. Writing each file into its own subdirectory under: " + options.outputDir.getAbsolutePath());
+        }
 
         for (File file : rwsFiles) {
             String currentFilePath = file.getPath().replace("\\", "/");
@@ -36,9 +40,7 @@ public class Main {
             }
 
             try {
-                File exportRootDir = options.outputDir != null
-                        ? options.outputDir
-                        : ExportPathResolver.createDefaultExportDir(currentFilePath);
+                File exportRootDir = resolveExportRootDir(options, currentFilePath, totalFiles);
 
                 RwsExtractor extractor = new RwsExtractor();
                 extractor.setExportRootDir(exportRootDir);
@@ -53,6 +55,24 @@ public class Main {
                 continue;
             }
         }
+    }
+
+    static File resolveExportRootDir(CliArguments.Options options, String currentFilePath, int totalFiles) {
+        if (options.outputDir == null) {
+            return ExportPathResolver.createDefaultExportDir(currentFilePath);
+        }
+        if (totalFiles <= 1) {
+            return options.outputDir;
+        }
+
+        String fileName = new File(currentFilePath).getName();
+        int dotIndex = fileName.lastIndexOf('.');
+        String baseName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
+        if (baseName == null || baseName.isBlank()) {
+            baseName = "extracted";
+        }
+
+        return new File(options.outputDir, baseName);
     }
 
     static File[] resolveRwsFiles(CliArguments.Options options) {
